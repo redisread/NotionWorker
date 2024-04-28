@@ -1,0 +1,22 @@
+{
+  "name": "notion-proxy",
+  "version": "1.0.0",
+  "description": "封装快捷指令调用notion api",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "start": "wrangler dev",
+    "dev": "wrangler dev",
+    "build": "node build.mjs"
+  },
+  "author": "VictorHong",
+  "license": "ISC",
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "cheerio": "^1.0.0-rc.12",
+    "hono": "^4.2.8"
+  },
+  "devDependencies": {
+    "wrangler": "^3.52.0"
+  }
+}

@@ -1,0 +1,6 @@
+name = "notion-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-04-27"
+# usage_model = "bundled"
+# 兼容node.js的api
+node_compat = true
