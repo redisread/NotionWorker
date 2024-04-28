@@ -1,5 +1,5 @@
 {
-  "name": "notion-proxy",
+  "name": "notion-worker",
   "version": "1.0.0",
   "description": "封装快捷指令调用notion api",
   "private": true,
