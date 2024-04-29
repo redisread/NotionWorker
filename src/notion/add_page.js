@@ -92,6 +92,29 @@ async function getRequestProps(props, url, title) {
             propsBody[name] = {
                 "url": value
             }
+        } else if (type == 'multi_select') {
+            var multi_select_list;
+            if (typeof value === 'string') {
+                multi_select_list = value.split("\n").map((item) => {
+                    return { "name": item }
+                });
+            } else {
+                multi_select_list = value.map((item) => {
+                    return { "name": item }
+                });
+            }
+            propsBody[name] = {
+                "multi_select": multi_select_list
+            }
+        } else if (type == 'rich_text') {
+            const text = value ? value: title;
+            propsBody[name] = {
+                "rich_text": [{
+                    "text": {
+                        "content": text
+                    }
+                }]
+            }
         }
     });
 
@@ -113,12 +136,6 @@ async function createPage(ctx, notionApiKey, databaseId, url, props) {
     console.log("requestBody: " + JSON.stringify(requestBody));
     const notion = new Client({ auth: notionApiKey });
     const r = await notion.pages.create(requestBody).then((response) => {console.log(response);});
-    // // console.log("code: " + r.code + " msg:"+ r.message + " status:" + r.status);
-    // if (r.ok) {
-    //     console.log("ok: " + r);
-    // } else {
-    //     console.log("error: " + JSON.stringify(r));
-    // }
     return ctx.text(`创建成功 --- ${title}`)
 }
 
@@ -126,6 +143,7 @@ async function createPage(ctx, notionApiKey, databaseId, url, props) {
 
 let deal = async (ctx) => {
     const { notionApiKey, databaseId, url, props } = await ctx.req.json();
+    console.log("request json: " + JSON.stringify(await ctx.req.json()));
     console.log(`notionApiKey: ${notionApiKey} databaseId: ${databaseId} url: ${url} props: ${props}`);
     return await createPage(ctx, notionApiKey, databaseId, url, props);
 };
