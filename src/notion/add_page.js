@@ -115,7 +115,7 @@ async function getRequestProps(props, url, title) {
                     }
                 }]
             }
-        } else if (type == "number") {
+        } else if (type == 'number') {
             propsBody[name] = {
                 "number": value
             }
