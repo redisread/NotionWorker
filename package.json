@@ -15,5 +15,9 @@
     "typescript": "^5.5.2",
     "vitest": "2.1.8",
     "wrangler": "^3.60.3"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "hono": "^4.6.15"
   }
 }

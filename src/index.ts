@@ -10,9 +10,64 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import pageRouter from './routes/page';
+import databaseRouter from './routes/database';
 
-export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
-	},
-} satisfies ExportedHandler<Env>;
+const app = new Hono<{ Bindings: Env }>();
+
+app.get('/', (c) => {
+  const name = 'World';
+  return c.html(`
+	  <html>
+		<body>
+		  <h1>Hello ${name}</h1>
+		</body>
+	  </html>
+	`);
+});
+
+const notFoundHtml = `
+  <html>
+    <head>
+      <title>404 Not Found</title>
+    </head>
+    <body>
+      <h1>404 Not Found</h1>
+      <p>The requested URL was not found on this server.</p>
+    </body>
+  </html>
+`;
+app.notFound((c) => c.html(notFoundHtml));
+
+
+const errorHtmlTemplate = `
+  <html>
+    <head>
+      <title>Error</title>
+    </head>
+    <body>
+      <h1>Error</h1>
+      <p>{ERROR_MESSAGE}</p>
+      <pre>{ERROR_STACK}</pre>
+    </body>
+  </html>
+`;
+
+app.onError((err, c) => {
+  const stackArr = err.stack?.split('\n').join('<br>') || '';
+  const result = errorHtmlTemplate
+    .replace('{ERROR_MESSAGE}', err.message)
+    .replace('{ERROR_STACK}', stackArr);
+  return c.html(result, 500);
+});
+
+app.use('/*', cors());
+
+
+app.route('/notion/page', pageRouter);
+app.route('/notion/database', databaseRouter);
+
+
+export default app;
