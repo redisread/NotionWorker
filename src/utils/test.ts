@@ -1,13 +1,13 @@
 // ./prisma/testCreate.ts
 
-import { getWebPageTitle } from './web';
+import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo } from './web';
 
 
-async function main() {
+// npx tsx ./src/utils/test.ts
+async function fetchTitle() {
 
     const title1 = await getWebPageTitle('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
     console.log(title1);
-
 
     const title2 = await getWebPageTitle('https://mp.weixin.qq.com/s/ZIsPMvtEXVd__FhO9NTgpQ');
     console.log(title2);
@@ -23,4 +23,20 @@ async function main() {
     console.log(title5);
 }
 
-main()
+
+
+async function fetchContent() {
+//     const r: WebPageInfo = await fetchWebPageInfo('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
+//     console.log(JSON.stringify(r, null, 2));
+
+    // const content1 = await fetchWebPage('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
+    // console.log(content1);
+    // console.log(extractMainContent(content1));
+
+    const summarizeText = await summarizeWebPage('https://mp.weixin.qq.com/s/ZIsPMvtEXVd__FhO9NTgpQ');
+    console.log(summarizeText);
+
+}
+
+// fetchTitle()
+fetchContent()

@@ -14,6 +14,12 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import pageRouter from './routes/page';
 import databaseRouter from './routes/database';
+import { summarizeWebPage } from './utils/web'
+export interface Env {
+  // If you set another name in wrangler.toml as the value for 'binding',
+  // replace "AI" with the variable name you defined.
+  AI: Ai;
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -69,5 +75,14 @@ app.use('/*', cors());
 app.route('/notion/page', pageRouter);
 app.route('/notion/database', databaseRouter);
 
+app.post('/notion/ai', async (c) => {
+  // const response = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+  //   prompt: "如何整理笔记？",
+  // });
+  const { url } = await c.req.json();
+
+  const response = await summarizeWebPage(url);
+  return new Response(JSON.stringify(response));
+});
 
 export default app;

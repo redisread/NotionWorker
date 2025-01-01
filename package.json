@@ -19,6 +19,7 @@
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "cheerio": "^1.0.0",
-    "hono": "^4.6.15"
+    "hono": "^4.6.15",
+    "openai": "^4.77.0"
   }
 }
