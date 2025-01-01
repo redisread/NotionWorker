@@ -29,7 +29,7 @@ async function createPage(ctx: Context): Promise<Response> {
     var title: string | null;
     const webPageInfo: WebPageInfo = await fetchWebPageInfo(url);
     title = webPageInfo.title;
-    console.log(`get title: ${title}`);
+    console.log(`get webPageInfo: ` + JSON.stringify(webPageInfo));
     try {
         const properties: Record<string, any> = {};
         // 处理 props

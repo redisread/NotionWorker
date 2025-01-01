@@ -32,8 +32,11 @@ async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 
         console.log('title:', title);
         const originContent = html;
-        const parseContent = $('p').map((_, el) => $(el).text()).get().join("\n").slice(0, MAX_CONTENT_LENGTH);
+        var parseContent = $('p').map((_, el) => $(el).text()).get().join("\n").slice(0, MAX_CONTENT_LENGTH);
 
+        if (url.includes('jike')) {
+            parseContent = await extractJikeTextFromHTML(html);
+        }
         return {
             title,
             originContent,
@@ -43,6 +46,22 @@ async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
         console.error('Error fetching web page info:', error);
         throw new Error(`Failed to fetch web page info: ${error instanceof Error ? error.message : String(error)}`);
     }
+}
+
+
+async function extractJikeTextFromHTML(html: string): Promise<string> {
+    // 使用 cheerio 加载 HTML 字符串
+    const $ = load(html);
+
+    // 查找 .jsx-3930310120.wrap 元素
+    const wrapElement = $('.jsx-3930310120.wrap');
+
+    if (wrapElement.length > 0) {
+        // 获取并返回元素中的纯文本内容（去除所有 HTML 标签）
+        return wrapElement.text().trim();
+    }
+
+    return '';
 }
 
 

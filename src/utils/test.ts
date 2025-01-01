@@ -1,7 +1,9 @@
 // ./prisma/testCreate.ts
 
-import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo,getFirstCoverImage } from './web';
+import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo, getFirstCoverImage } from './web';
+import {load} from 'cheerio';
 
+import TurndownService from 'turndown';
 
 // npx tsx ./src/utils/test.ts
 async function fetchTitle() {
@@ -26,29 +28,48 @@ async function fetchTitle() {
     console.log(title6);
 }
 
+function extractTextFromHTML(html: string): string {
+    // 使用 cheerio 加载 HTML 字符串
+    const $ = load(html);
+
+    // 查找 .jsx-3930310120.wrap 元素
+    const wrapElement = $('.jsx-3930310120.wrap');
+
+    if (wrapElement.length > 0) {
+        // 获取并返回元素中的纯文本内容（去除所有 HTML 标签）
+        return wrapElement.text().trim();
+    }
+
+    return '';
+}
 
 
 async function fetchContent() {
-//     const r: WebPageInfo = await fetchWebPageInfo('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
-//     console.log(JSON.stringify(r, null, 2));
+    const r: WebPageInfo = await fetchWebPageInfo('https://m.okjike.com/originalPosts/6767fcf38dc13469672f99a0');
+    // const turndownService = new TurndownService();
+    // turndownService.remove('div');
+    // turndownService.remove('script');
+    // // console.log("r: " + JSON.stringify(r));
+    const parseContent = extractTextFromHTML(r.originContent);
+    console.log(parseContent);
 
     // const content1 = await fetchWebPage('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
     // console.log(content1);
     // console.log(extractMainContent(content1));
 
-    const summarizeText = await summarizeWebPage('https://mp.weixin.qq.com/s/ZIsPMvtEXVd__FhO9NTgpQ');
-    console.log(summarizeText);
+    // const summarizeText = await summarizeWebPage('https://mp.weixin.qq.com/s/ZIsPMvtEXVd__FhO9NTgpQ');
+    // console.log(summarizeText);
 
 }
 
 
-async function fetchWebCover(url: string){
-    const webInfo= await fetchWebPageInfo(url);
+async function fetchWebCover(url: string) {
+    const webInfo = await fetchWebPageInfo(url);
     console.log(webInfo);
     const response = await getFirstCoverImage(webInfo.originContent);
     console.log(response);
 }
 
 // fetchTitle()
-// fetchContent()
-fetchWebCover('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
+fetchContent()
+// fetchWebCover('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
