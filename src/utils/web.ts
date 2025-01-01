@@ -222,5 +222,26 @@ async function summarizeWebPageByContent(webPageInfo: WebPageInfo, summaryExtent
     }
 }
 
-export { getWebPageTitle, summarizeWebPage, fetchWebPageInfo ,summarizeWebPageByContent};
+
+async function getFirstCoverImage(html: string): Promise<string | null> {
+    const patterns = [
+        /<meta\s+property="og:image"\s+content="(.*?)"/i,
+        /<meta\s+name="twitter:image"\s+content="(.*?)"/i,
+        /<img[^>]+class="[^"]*\b(?:cover|hero|banner)\b[^"]*"[^>]+src="(.*?)"/i,
+        /<img[^>]+src="(.*?)"[^>]+class="[^"]*\b(?:cover|hero|banner)\b[^"]*"/i,
+        /<img[^>]+src="(.*?)"/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match && match[1]) {
+            // 解码 URL 以处理可能的编码字符
+            return match[1];
+        }
+    }
+
+    return null;
+}
+
+export { getWebPageTitle, summarizeWebPage, fetchWebPageInfo ,summarizeWebPageByContent, getFirstCoverImage};
 export type { WebPageInfo, SummaryResult ,SummaryExtentInfo};

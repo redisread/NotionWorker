@@ -80,6 +80,7 @@ async function createPage(ctx: Context): Promise<Response> {
             properties: properties
         };
 
+        var summaryResult;
         // 如果 needSummarize 为 true，则添加摘要到正文children
         if (needSummarize) {
             const existTagList: string[] = await notionService.retrieveDatabaseAllTags(databaseId);
@@ -88,7 +89,7 @@ async function createPage(ctx: Context): Promise<Response> {
                 existingTags: existTagList,
                 existingAreas: existAreaList
             }
-            const summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo);
+            summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo);
             if (summaryResult) {
                 requestBody.children = [
                     { type: 'paragraph', paragraph: { rich_text: [{ text: { content: "摘要:\n" + summaryResult.summary } }] } },
@@ -113,7 +114,12 @@ async function createPage(ctx: Context): Promise<Response> {
         }
 
         const response = await notionService.createPage(requestBody);
-        return ctx.json(response);
+        return ctx.json({
+            title: webPageInfo.title,
+            summaryText: summaryResult? summaryResult.summary : "",
+            tags: summaryResult? summaryResult.tags : [],
+            area: summaryResult? summaryResult.area : {},
+        });
     } catch (error) {
         console.error("Error creating page:", error);
         return ctx.json({ error: `创建失败: ${error instanceof Error ? error.message : String(error)}` }, 500);

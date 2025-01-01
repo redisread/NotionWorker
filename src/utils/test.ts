@@ -1,6 +1,6 @@
 // ./prisma/testCreate.ts
 
-import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo } from './web';
+import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo,getFirstCoverImage } from './web';
 
 
 // npx tsx ./src/utils/test.ts
@@ -41,5 +41,14 @@ async function fetchContent() {
 
 }
 
-fetchTitle()
+
+async function fetchWebCover(url: string){
+    const webInfo= await fetchWebPageInfo(url);
+    console.log(webInfo);
+    const response = await getFirstCoverImage(webInfo.originContent);
+    console.log(response);
+}
+
+// fetchTitle()
 // fetchContent()
+fetchWebCover('https://blog.loli.wang/blog/2024-07-06-cfd1prisma/doc/');
