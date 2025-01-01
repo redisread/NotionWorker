@@ -21,6 +21,9 @@ async function fetchTitle() {
 
     const title5 = await getWebPageTitle('https://sspai.com/post/73645');
     console.log(title5);
+
+    const title6 = await getWebPageTitle('https://guangzhengli.com/blog/zh/indie-hacker-tech-stack-2024/#cloudflare-worker');
+    console.log(title6);
 }
 
 
@@ -38,5 +41,5 @@ async function fetchContent() {
 
 }
 
-// fetchTitle()
-fetchContent()
+fetchTitle()
+// fetchContent()

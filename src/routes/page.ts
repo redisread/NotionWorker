@@ -2,9 +2,9 @@ import { Client } from '@notionhq/client';
 import { Context, Hono } from 'hono';
 //  https://shortcut.jiahongw.com/notion/addPage
 import { GetDatabaseResponse, QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints';
-import NotionService from '../services/notion.service';
-import { CreatePageParameters } from '@notionhq/client/build/src/api-endpoints';
-import { getWebPageTitle } from '../utils/web'
+import NotionService, { RelationPage } from '../services/notion.service';
+import { CreatePageParameters,BlockObjectRequest } from '@notionhq/client/build/src/api-endpoints';
+import { fetchWebPageInfo, getWebPageTitle, summarizeWebPageByContent ,WebPageInfo, SummaryExtentInfo} from '../utils/web'
 
 // page ===== /notion/page
 async function retrievePage(ctx: Context): Promise<Response> {
@@ -23,20 +23,15 @@ async function retrievePage(ctx: Context): Promise<Response> {
 
 
 async function createPage(ctx: Context): Promise<Response> {
-    const { notionApiKey, databaseId, url, props } = await ctx.req.json();
+    const { notionApiKey, databaseId, url, props, needSummarize } = await ctx.req.json();
     console.log(`notionApiKey: ${notionApiKey}, databaseId: ${databaseId}, url: ${url} props: ${JSON.stringify(props)}`);
     const notionService: NotionService = new NotionService(notionApiKey);
     var title: string | null;
-    try {
-        title = await getWebPageTitle(url);
-    } catch (error) {
-        console.error("Error querying title:", error);
-        title = null;
-    }
+    const webPageInfo: WebPageInfo = await fetchWebPageInfo(url);
+    title = webPageInfo.title;
     console.log(`get title: ${title}`);
     try {
         const properties: Record<string, any> = {};
-
         // 处理 props
         if (props && Array.isArray(props)) {
             props.forEach(prop => {
@@ -84,6 +79,39 @@ async function createPage(ctx: Context): Promise<Response> {
             parent: { database_id: databaseId },
             properties: properties
         };
+
+        // 如果 needSummarize 为 true，则添加摘要到正文children
+        if (needSummarize) {
+            const existTagList: string[] = await notionService.retrieveDatabaseAllTags(databaseId);
+            const existAreaList: RelationPage[] = await notionService.retrieveDatabaseAllArea(databaseId, '🚩 领域');
+            const summaryExtentInfo:SummaryExtentInfo = {
+                existingTags: existTagList,
+                existingAreas: existAreaList
+            }
+            const summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo);
+            if (summaryResult) {
+                requestBody.children = [
+                    { type: 'paragraph', paragraph: { rich_text: [{ text: { content: "摘要:\n" + summaryResult.summary } }] } },
+                    // 添加标签 
+                    { type: 'paragraph', paragraph: { rich_text: [{ text: { content: "标签:\n" +JSON.stringify(summaryResult.tags )} }] } },
+                    // 添加领域
+                    { type: 'paragraph', paragraph: { rich_text: [{ text: { content: "领域:\n" +JSON.stringify(summaryResult.area )} }] } }
+                ];
+                // 设置标签
+                if (summaryResult.tags && summaryResult.tags.length > 0) {
+                    requestBody.properties["标签"] = {
+                        multi_select: summaryResult.tags.map(tag => ({ name: tag }))
+                    };
+                }
+                // 设置领域
+                if (summaryResult.area) {
+                    requestBody.properties["🚩 领域"] = {
+                        relation: [{ id: summaryResult.area.id }]
+                    };
+                }
+            }
+        }
+
         const response = await notionService.createPage(requestBody);
         return ctx.json(response);
     } catch (error) {

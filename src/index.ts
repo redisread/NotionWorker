@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import pageRouter from './routes/page';
 import databaseRouter from './routes/database';
-import { summarizeWebPage } from './utils/web'
+import { summarizeWebPage, SummaryResult } from './utils/web'
 export interface Env {
   // If you set another name in wrangler.toml as the value for 'binding',
   // replace "AI" with the variable name you defined.
@@ -81,7 +81,7 @@ app.post('/notion/ai', async (c) => {
   // });
   const { url } = await c.req.json();
 
-  const response = await summarizeWebPage(url);
+  const response: SummaryResult = await summarizeWebPage(url);
   return new Response(JSON.stringify(response));
 });
 

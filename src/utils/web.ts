@@ -1,8 +1,8 @@
 // 编写一个根据 URL 获取网页标题的方法 
 import { load } from 'cheerio';
 import OpenAI from "openai";
-
-const MAX_CONTENT_LENGTH = 2000; // 限制处理的内容长度
+import {RelationPage} from '../services/notion.service'
+const MAX_CONTENT_LENGTH = 10000; // 限制处理的内容长度
 
 interface WebPageInfo {
     title: string;
@@ -64,7 +64,6 @@ async function fetchWebPage(url: string): Promise<string> {
 }
 
 
-
 // 分割文本函数
 function splitText(text: string, maxLength: number): string[] {
     const sentences = text.split(/(?<=[。！？\n])/); // 按句号、感叹号、换行符分割
@@ -105,7 +104,7 @@ async function summarizeChunk(chunk: string): Promise<string> {
 }
 
 // 主函数：处理长文本
-async function summarizeLongText(text: string): Promise<string> {
+async function summarizeLongText(text: string): Promise<SummaryResult> {
     const chunks = splitText(text, MAX_CONTENT_LENGTH); // 分割文本
     console.log(`Text is split into ${chunks.length} chunks.`);
 
@@ -119,29 +118,74 @@ async function summarizeLongText(text: string): Promise<string> {
     const combinedSummary = summaries.join(" ");
     const finalSummary = await summarizeChunk(combinedSummary);
 
-    return finalSummary;
+    return {
+        summary: finalSummary,
+        tags: []
+    };
+}
+
+interface SummaryResult {
+    summary: string;
+    tags: string[];
+    area?: RelationPage;
+}
+
+interface SummaryExtentInfo {
+    existingTags: string[];
+    existingAreas?: RelationPage[];
 }
 
 
-async function summarizeText(text: string): Promise<string> {
+async function summarizeText(text: string, summaryExtentInfo?: SummaryExtentInfo): Promise<SummaryResult> {
     try {
         const openai = new OpenAI({
             baseURL: 'https://api.deepseek.com',
             apiKey: 'sk-7786e6f6e2ef464e8c2f5924641b6b28'
         });
+
+        const existingTags = summaryExtentInfo?.existingTags || [];
+        const existingAreas = summaryExtentInfo?.existingAreas || [];
+        const prompt = `Summarize the following text in Chinese and provide up to 5 relevant tags. 
+                Prioritize using tags from the existing list if they are relevant. If the existing tags are not suitable, generate new ones. 
+                The total number of tags should not exceed 5.
+                
+                Also, select the most appropriate area for this text from the existing areas list. If none of the existing areas are suitable, suggest a new one.
+
+                Existing tags: ${JSON.stringify(existingTags)}
+                Existing areas: ${JSON.stringify(existingAreas)}
+
+                Return your response in the following JSON format:
+                {
+                    "summary": "Your summary here",
+                    "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+                    "area": {
+                        "id": "ID of the area",
+                        "name": "Name of the area"
+                    }
+                }
+                
+                Text to summarize: ${text}`;
+
+        console.log("prompt: ", prompt);
+
         const completion = await openai.chat.completions.create({
             model: "deepseek-chat", // 或者 "gpt-4"
             messages: [
-                { role: "system", content: "You are a helpful assistant for text summarization." },
-                { role: "user", content: `Summarize the following text with chinese: ${text}` },
+                { role: "system", content: "You are a helpful assistant for text summarization and tagging. Please provide your response in JSON format with 'summary' and 'tags' fields." },
+                { role: "user", content: prompt},
             ],
         });
-
-        const summary = completion.choices[0].message.content;
-        return summary || "Failed to generate summary.";
+        const response = completion.choices[0].message.content;
+        if (!response) {
+            throw new Error("Failed to generate summary and tags.");
+        }
+        return JSON.parse(response);
     } catch (error) {
-        console.error("Error during summarization:", error);
-        return "An error occurred while summarizing the text.";
+        console.error("Error during summarization and tagging:", error);
+        return {
+            summary: "An error occurred while summarizing the text.",
+            tags: []
+        };
     }
 }
 
@@ -151,25 +195,32 @@ async function summarizeText(text: string): Promise<string> {
  * @param url 网页链接
  * @returns 
  */
-async function summarizeWebPage(url: string): Promise<string> {
+async function summarizeWebPage(url: string): Promise<SummaryResult> {
+    console.log("Fetching webpage...");
+    const webPageInfo = await fetchWebPageInfo(url);
+    return summarizeWebPageByContent(webPageInfo);
+}
+
+
+async function summarizeWebPageByContent(webPageInfo: WebPageInfo, summaryExtentInfo?: SummaryExtentInfo): Promise<SummaryResult> {
     try {
-        console.log("Fetching webpage...");
-        const webPageInfo = await fetchWebPageInfo(url);
-
         console.log("Summarizing content...");
-
         const content = webPageInfo.parseContent || webPageInfo.originContent;
         if (content.length > MAX_CONTENT_LENGTH) {
             console.log("Content is too long, summarizing in chunks...");
             return summarizeLongText(content);
-        } 
-        const summary = await summarizeText(webPageInfo.parseContent || webPageInfo.originContent);
+        }
+        const summary: SummaryResult = await summarizeText(webPageInfo.parseContent || webPageInfo.originContent, summaryExtentInfo);
+        console.log("Summary:", summary);
         return summary;
     } catch (error) {
         console.error("Error summarizing webpage:", error);
-        return "Failed to summarize webpage.";
+        return {
+            summary: "An error occurred while summarizing the webpage.",
+            tags: []
+        };
     }
 }
 
-export { getWebPageTitle, summarizeWebPage, fetchWebPageInfo };
-export type { WebPageInfo };
+export { getWebPageTitle, summarizeWebPage, fetchWebPageInfo ,summarizeWebPageByContent};
+export type { WebPageInfo, SummaryResult ,SummaryExtentInfo};
