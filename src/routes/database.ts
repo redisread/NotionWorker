@@ -61,16 +61,29 @@ async function retrieveDatabasePropertyDetails(ctx: Context): Promise<Response> 
  * @returns
  */
 async function queryDatabase(ctx: Context): Promise<Response> {
-    const { notionApiKey, databaseId } = await ctx.req.json();
-    console.log(`notionApiKey: ${notionApiKey} databaseId: ${databaseId}`);
-    const notionService: NotionService = new NotionService(notionApiKey);
+    const { notionApiKey, databaseId, filter } = await ctx.req.json();
+    console.log('收到查询请求，过滤条件:', JSON.stringify(filter, null, 2));
+    
+    if (filter?.and) {
+        filter.and.forEach((condition: any, index: number) => {
+            console.log(`时间条件 ${index + 1}:`, {
+                属性名: condition.property,
+                条件类型: condition.date ? Object.keys(condition.date)[0] : '未知',
+                时间值: condition.date ? Object.values(condition.date)[0] : '未知'
+            });
+        });
+    }
+
     try {
-        const response: QueryDatabaseResponse = await notionService.queryDatabase(databaseId);
-        console.log(response);
+        const notionService = new NotionService(notionApiKey);
+        const response = await notionService.queryDatabase(databaseId, filter);
+        console.log(`查询结果: 找到 ${response.results.length} 条记录`);
         return ctx.json(response);
     } catch (error) {
-        console.error("Error querying database:", error);
-        return ctx.json({ error: `查询失败: ${error instanceof Error ? error.message : String(error)}` }, 500);
+        console.error('查询失败:', error);
+        return ctx.json({ 
+            error: `查询失败: ${error instanceof Error ? error.message : String(error)}` 
+        }, 500);
     }
 }
 

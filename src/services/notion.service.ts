@@ -30,10 +30,21 @@ class NotionService {
         }
     }
 
-    async queryDatabase(databaseId: string): Promise<QueryDatabaseResponse> {
+    async queryDatabase(databaseId: string, filter?: any): Promise<QueryDatabaseResponse> {
         try {
-            return await this.client.databases.query({ database_id: databaseId });
+            const queryParams: any = { database_id: databaseId };
+            if (filter) {
+                queryParams.filter = filter;
+                console.log('NotionService 执行查询:', {
+                    数据库ID: databaseId,
+                    过滤条件: JSON.stringify(filter, null, 2)
+                });
+            }
+            const response = await this.client.databases.query(queryParams);
+            console.log(`NotionService 查询完成: 返回 ${response.results.length} 条记录`);
+            return response;
         } catch (error) {
+            console.log('NotionService 查询失败:', error);
             this.handleError('查询数据库内容失败', error);
         }
     }
