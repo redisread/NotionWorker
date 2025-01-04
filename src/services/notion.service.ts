@@ -1,16 +1,26 @@
 import { Client } from '@notionhq/client';
-import { GetDatabaseResponse, QueryDatabaseResponse, GetPageResponse, CreatePageResponse, CreatePageParameters } from '@notionhq/client/build/src/api-endpoints';
+import { 
+    GetDatabaseResponse, 
+    QueryDatabaseResponse, 
+    GetPageResponse, 
+    CreatePageResponse, 
+    CreatePageParameters,
+    DatabaseObjectResponse,
+    PageObjectResponse,
+} from '@notionhq/client/build/src/api-endpoints';
+import { 
+    NotionBlock, 
+    RelationPage,
+    PropertyRequest,
+    PropertyDetail,
+    DatabasePropertiesDetail,
+    PropertyQueryRequest,
+    PropertyType
+} from '../types/notion';
 
 /**
  * Interface for a relation page
  */
-
-interface RelationPage {
-    id: string;
-    name: string;
-}
-
-
 
 class NotionService {
 
@@ -29,6 +39,65 @@ class NotionService {
         } catch (error) {
             console.error("Error retrieving database:", error);
             throw new Error(`查询失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    async retrieveDatabasePropertyDetails(
+        databaseId: string,
+        propertyRequests: PropertyRequest[]
+    ): Promise<DatabasePropertiesDetail> {
+        try {
+            const response = await this.retrieveDatabase(databaseId);
+            const properties: Record<string, PropertyDetail> = {};
+
+            for (const request of propertyRequests) {
+                const property = response.properties[request.name];
+                if (!property) {
+                    throw new Error(`属性 "${request.name}" 不存在`);
+                }
+
+                if (request.type && property.type !== request.type) {
+                    throw new Error(`属性 "${request.name}" 类型不匹配，期望 "${request.type}"，实际 "${property.type}"`);
+                }
+
+                const detail: PropertyDetail = {
+                    name: request.name,
+                    type: property.type,
+                    id: property.id
+                };
+
+                if (property.type === 'select') {
+                    detail.options = property.select.options.map(opt => ({
+                        id: opt.id,
+                        name: opt.name,
+                        color: opt.color
+                    }));
+                } else if (property.type === 'multi_select') {
+                    detail.options = property.multi_select.options.map(opt => ({
+                        id: opt.id,
+                        name: opt.name,
+                        color: opt.color
+                    }));
+                } else if (property.type === 'relation') {
+                    const relationTargetDatabaseId = property.relation.database_id;
+                    const queryResponse = await this.queryDatabase(relationTargetDatabaseId);
+                    detail.options = queryResponse.results
+                        .filter((page): page is PageObjectResponse => 'properties' in page)
+                        .map(page => ({
+                            id: page.id,
+                            name: (page.properties.Name as any).title?.[0]?.plain_text || ''
+                        }));
+                }
+                properties[request.name] = detail;
+            }
+
+            return {
+                databaseId,
+                properties
+            };
+        } catch (error) {
+            console.error("Error retrieving database property details:", error);
+            throw new Error(`获取数据库属性详情失败: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     
@@ -134,7 +203,8 @@ class NotionService {
         }
     }
 
+
 }
 
 export default NotionService;
-export type { RelationPage };
+export type { RelationPage, PropertyRequest, PropertyDetail, DatabasePropertiesDetail, PropertyQueryRequest, PropertyType };

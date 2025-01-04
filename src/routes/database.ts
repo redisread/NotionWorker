@@ -2,6 +2,7 @@ import { Context, Hono } from 'hono';
 //  https://shortcut.jiahongw.com/notion/addPage
 import { GetDatabaseResponse, QueryDatabaseResponse, PageObjectResponse, RichTextItemResponse } from '@notionhq/client/build/src/api-endpoints';
 import NotionService from '../services/notion.service';
+import { PropertyRequest, DatabasePropertiesDetail } from '../services/notion.service';
 
 interface RelationPage {
     id: string;
@@ -46,6 +47,14 @@ async function retrieveDatabaseAllArea(ctx: Context): Promise<Response> {
 }
 
 
+async function retrieveDatabasePropertyDetails(ctx: Context): Promise<Response> {
+    const { notionApiKey, databaseId ,propertyRequests } = await ctx.req.json();
+    console.log(`retrieveDatabasePropertyDetails request: notionApiKey: ${notionApiKey} databaseId: ${databaseId}`);
+    const notionService: NotionService = new NotionService(notionApiKey);
+    const propertyDetails: DatabasePropertiesDetail = await notionService.retrieveDatabasePropertyDetails(databaseId, propertyRequests);
+    return ctx.json(propertyDetails);
+}
+
 /**
  * 返回所有的 Page ？
  * @param ctx
@@ -70,6 +79,7 @@ const databaseRouter = new Hono();
 databaseRouter.post('/retrieve', retrieveDatabase);
 databaseRouter.post('/retrieveAllTags', retrieveDatabaseAllTags);
 databaseRouter.post('/retrieveDatabaseAllArea', retrieveDatabaseAllArea);
+databaseRouter.post('/retrieveDatabasePropertyDetails', retrieveDatabasePropertyDetails);
 databaseRouter.post('/query', queryDatabase);
 
 
