@@ -10,6 +10,26 @@ import { PropertyValue } from '../types/notion';
 import { PropertyDetail } from '../types/notion';
 import { SelectChoice, MultiSelectChoice, RelationChoice } from '../utils/web';
 
+import NotionMarkdownConverter from '../utils/notion.markdown.converter';
+
+
+const MAX_CONTENT_LENGTH = 1500;
+
+
+function splitContent(content: string): string[] {
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < content.length) {
+        let end = start + MAX_CONTENT_LENGTH;
+        if (end > content.length) end = content.length;
+        chunks.push(content.slice(start, end));
+        start = end;
+    }
+    return chunks;
+}
+
+
+
 // page ===== /notion/page
 async function retrievePage(ctx: Context): Promise<Response> {
 	const { notionApiKey, databaseId, pageId } = await ctx.req.json();
@@ -208,6 +228,27 @@ async function createPage(ctx: Context): Promise<Response> {
 				}
 				// 将所有内容块添加到请求体
 				if (contentBlocks.length > 0) {
+
+					// const converter:NotionMarkdownConverter = new NotionMarkdownConverter();
+					// const blocks  = await converter.convertMarkdownToBlocks(webPageInfo.originContent);
+
+					// blocks.forEach((block) => {
+					// 	contentBlocks.push(block);
+					// });
+					// const contentChunks = splitContent(webPageInfo.originContent || '');
+					// contentChunks.forEach((chunk, index) => {
+					// 	contentBlocks.push({
+					// 		type: 'paragraph',
+					// 		paragraph: {
+					// 			rich_text: [
+					// 				{
+					// 					type: 'text',
+					// 					text: { content: index === 0 ? `原文:\n${chunk}` : chunk },
+					// 				},
+					// 			],
+					// 		},
+					// 	});
+					// });
 					requestBody.children = contentBlocks;
 				}
 			}

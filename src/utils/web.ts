@@ -35,11 +35,16 @@ async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 
 		if (!url.includes('jike')) {
 			// 获取网页内容
-			const jinaContent = await fetchWebContent(url);
+			const jinaContent = await fetchLLMMarkdownContent(url);
 			const jinaPageParseInfo: JinaPageParseInfo = JSON.parse(jinaContent);
+
+			const jinaContentMarkdown = await fetchMarkdownContent(url);
+			const jinaMarkdownPageParseInfo: JinaPageParseInfo = JSON.parse(jinaContentMarkdown);
+
+
 			return {
 				title: jinaPageParseInfo.data.title,
-				originContent: jinaPageParseInfo.data.content,
+				originContent: jinaMarkdownPageParseInfo.data.content,
 				parseContent: jinaPageParseInfo.data.content,
 			};
 		}
@@ -114,12 +119,13 @@ async function fetchWebPage(url: string): Promise<string> {
 }
 
 
-async function fetchWebContent(url: string): Promise<string> {
+async function fetchLLMMarkdownContent(url: string): Promise<string> {
     const proxyUrl = 'https://r.jina.ai/';
     const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
 
+	// 'x-return-format:': 'true',
     const headers = {
-        'accept': ' application/json',
+        'accept': 'application/json',
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     };
 
@@ -136,6 +142,34 @@ async function fetchWebContent(url: string): Promise<string> {
         throw error;
     }
 }
+
+
+
+async function fetchMarkdownContent(url: string): Promise<string> {
+    const proxyUrl = 'https://r.jina.ai/';
+    const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
+
+	// 'x-return-format:': 'true',
+    const headers = {
+        'accept': 'application/json',
+		'x-return-format': 'html',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    };
+
+    try {
+        const response = await fetch(fullUrl, { headers });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+		const text = await response.text();
+		// console.log('response:', text);
+        return text;
+    } catch (error) {
+        console.error('Error fetching web content:', error);
+        throw error;
+    }
+}
+
 
 // 分割文本函数
 function splitText(text: string, maxLength: number): string[] {
@@ -343,5 +377,6 @@ async function getFirstCoverImage(html: string): Promise<string | null> {
 	return null;
 }
 
+
 export { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, summarizeWebPageByContent, getFirstCoverImage };
-export type { WebPageInfo, SummaryResult, SummaryExtentInfo };
+export type { WebPageInfo, SummaryExtentInfo };
