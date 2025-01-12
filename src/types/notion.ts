@@ -146,7 +146,7 @@ interface Option {
 }
 
 // 定义属性选项的接口
-interface PropertyOptions {
+export interface PropertyOptions {
 	name: string;
 	options: Option[];
 }

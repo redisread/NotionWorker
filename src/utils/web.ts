@@ -158,15 +158,34 @@ async function summarizeText(text: string, summaryExtentInfo?: SummaryExtentInfo
 			apiKey: 'sk-7786e6f6e2ef464e8c2f5924641b6b28',
 		});
 
+		// 转换 selectOptions 为 map
+		const selectOptionsMap = summaryExtentInfo?.selectOptions?.reduce((acc, curr) => {
+			acc[curr.name] = curr.options.map((option) => option.name);
+			return acc;
+		}, {} as Record<string, string[]>) || {};
+		console.log('selectOptionsMap:', selectOptionsMap);
+
+		// 转换 multiSelectOptions 为 map
+		const multiSelectOptionsMap = summaryExtentInfo?.multiSelectOptions?.reduce((acc, curr) => {
+			acc[curr.name] = curr.options.map((option) => option.name);
+			return acc;
+		}, {} as Record<string, string[]>) || {};
+
+		// 转换 relationPages 为 map
+		const relationPagesMap = summaryExtentInfo?.relationPages?.reduce((acc, curr) => {
+			acc[curr.name] = curr.options.map((option) => option.name);
+			return acc;
+		}, {} as Record<string, string[]>) || {};
+
 		const prompt = `Analyze the following text and provide a structured response:
 
 1. Summarize the main content in Chinese.
 
 2. For each select option provided, choose the most appropriate option:
-${JSON.stringify(summaryExtentInfo?.selectOptions || [], null, 2)}
+${JSON.stringify(selectOptionsMap)}
 
 3. For each multi-select option provided, choose up to 5 most relevant options. If suitable options are not found, suggest new ones:
-${JSON.stringify(summaryExtentInfo?.multiSelectOptions || [], null, 2)}
+${JSON.stringify(multiSelectOptionsMap)}
 
 4. For each relation page provided, select the most appropriate one:
 ${JSON.stringify(summaryExtentInfo?.relationPages || [], null, 2)}
