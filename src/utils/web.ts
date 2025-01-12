@@ -72,19 +72,44 @@ async function extractJikeTextFromHTML(html: string): Promise<string> {
 
 async function fetchWebPage(url: string): Promise<string> {
 	try {
-		const response = await fetch(url, {
-			headers: {
-				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`Failed to fetch URL: ${url}`);
+		if (url.includes('jike')) {
+			const response = await fetch(url, {
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+				},
+			});
+			if (!response.ok) {
+				throw new Error(`Failed to fetch URL: ${url}`);
+			}
+			return await response.text();
 		}
-		return await response.text();
+		return await fetchWebContent(url);
 	} catch (error) {
 		console.error('Error fetching webpage:', error);
 		throw error;
 	}
+}
+
+
+async function fetchWebContent(url: string): Promise<string> {
+    const proxyUrl = 'https://r.jina.ai/';
+    const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
+
+    const headers = {
+        'accept': '*/*',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    };
+
+    try {
+        const response = await fetch(fullUrl, { headers });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.text();
+    } catch (error) {
+        console.error('Error fetching web content:', error);
+        throw error;
+    }
 }
 
 // 分割文本函数
