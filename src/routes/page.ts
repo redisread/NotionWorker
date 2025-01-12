@@ -43,7 +43,7 @@ async function createPage(ctx: Context): Promise<Response> {
 		// 处理 props
 		if (props && Array.isArray(props)) {
 			props.forEach((prop) => {
-				if (!prop.value) {
+				if (!prop.value &&  prop.type !== 'url') {
 					return;
 				}
 				switch (prop.type) {
@@ -92,6 +92,7 @@ async function createPage(ctx: Context): Promise<Response> {
 			parent: { database_id: databaseId },
 			properties: properties,
 		};
+		console.log('requestBody:', requestBody);
 
 		let summaryResult: SummaryResult | undefined;
 		// 如果 needSummarize 为 true，则添加摘要到正文children
@@ -242,7 +243,7 @@ async function preparePage(ctx: Context): Promise<Response> {
 		// 处理 props
 		if (props && Array.isArray(props)) {
 			props.forEach((prop) => {
-				if (!prop.value) {
+				if (!prop.value &&  prop.type !== 'url') {
 					return;
 				}
 				switch (prop.type) {
