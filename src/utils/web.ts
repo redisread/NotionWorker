@@ -12,6 +12,19 @@ interface WebPageInfo {
 	parseContent?: string;
 }
 
+
+interface JinaPageParseInfo {
+	
+	code: number;
+	status: number;
+	data: 
+	{
+		url: string;
+		content: string;
+		title: string;
+	};
+}
+
 async function getWebPageTitle(url: string): Promise<string | null> {
 	const webPageInfo: WebPageInfo = await fetchWebPageInfo(url);
 	return webPageInfo.title;
@@ -19,6 +32,18 @@ async function getWebPageTitle(url: string): Promise<string | null> {
 
 async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 	try {
+
+		if (!url.includes('jike')) {
+			// 获取网页内容
+			const jinaContent = await fetchWebContent(url);
+			const jinaPageParseInfo: JinaPageParseInfo = JSON.parse(jinaContent);
+			return {
+				title: jinaPageParseInfo.data.title,
+				originContent: jinaPageParseInfo.data.content,
+				parseContent: jinaPageParseInfo.data.content,
+			};
+		}
+
 		// 获取网页内容
 		const html = await fetchWebPage(url);
 
@@ -72,18 +97,16 @@ async function extractJikeTextFromHTML(html: string): Promise<string> {
 
 async function fetchWebPage(url: string): Promise<string> {
 	try {
-		if (url.includes('jike')) {
-			const response = await fetch(url, {
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-				},
-			});
-			if (!response.ok) {
-				throw new Error(`Failed to fetch URL: ${url}`);
-			}
-			return await response.text();
+		const response = await fetch(url, {
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+			},
+		});
+		if (!response.ok) {
+			throw new Error(`Failed to fetch URL: ${url}`);
 		}
-		return await fetchWebContent(url);
+		return await response.text();
+
 	} catch (error) {
 		console.error('Error fetching webpage:', error);
 		throw error;
@@ -96,7 +119,7 @@ async function fetchWebContent(url: string): Promise<string> {
     const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
 
     const headers = {
-        'accept': '*/*',
+        'accept': ' application/json',
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     };
 
@@ -105,7 +128,9 @@ async function fetchWebContent(url: string): Promise<string> {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return await response.text();
+		const text = await response.text();
+		console.log('response:', text);
+        return text;
     } catch (error) {
         console.error('Error fetching web content:', error);
         throw error;
