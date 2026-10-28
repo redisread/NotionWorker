@@ -1,6 +1,6 @@
 // ./prisma/testCreate.ts
 
-import { getWebPageTitle, summarizeWebPage, fetchWebPageInfo, WebPageInfo, getFirstCoverImage } from './web';
+import { getWebPageTitle, fetchWebPageInfo, WebPageInfo, getFirstCoverImage } from './web';
 import {load} from 'cheerio';
 
 import TurndownService from 'turndown';
@@ -57,8 +57,6 @@ async function fetchContent() {
     // console.log(content1);
     // console.log(extractMainContent(content1));
 
-    // const summarizeText = await summarizeWebPage('https://mp.weixin.qq.com/s/ZIsPMvtEXVd__FhO9NTgpQ');
-    // console.log(summarizeText);
 
 }
 

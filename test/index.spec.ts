@@ -34,30 +34,9 @@ describe('backend API', () => {
     expect((await post('/notion/page/create', {})).status).toBe(400);
     expect((await SELF.fetch('https://worker.test/notion/page/create', { method: 'POST', body: '{' })).status).toBe(400);
   });
-  it('fails clearly before fetching when AI secrets are absent', async () => {
-    expect((await post('/notion/page/create', { ...body, needSummarize: true })).status).toBe(503);
-  });
-  it('blocks paid AI requests without the separate access credential', async () => {
-    for (const path of ['/notion/ai', '/notion/page/create', '/notion/page/prepare']) {
-      const response = await worker.fetch(new Request(`https://worker.test${path}`, { method: 'POST', body: JSON.stringify({ ...body, needSummarize: true }) }), { DEEPSEEK_API_KEY: 'test-ai-key', AI_ACCESS_TOKEN: 'private-access' });
-      expect(response.status).toBe(401);
-    }
-  });
-  it('rejects an incorrect Bearer before any AI request', async () => {
-    const response = await worker.fetch(new Request('https://worker.test/notion/ai', {
-      method: 'POST', headers: { Authorization: 'Bearer wrong-access' }, body: JSON.stringify({ url: body.url }),
-    }), { DEEPSEEK_API_KEY: 'test-ai-key', AI_ACCESS_TOKEN: 'private-access' });
-    expect(response.status).toBe(401);
-  });
-  it('allows the correct Bearer to reach the mocked AI service', async () => {
-    webpage();
-    fetchMock.get('https://api.deepseek.com').intercept({ path: '/chat/completions', method: 'POST' })
-      .reply(200, { choices: [{ message: { content: JSON.stringify({ summary: '测试摘要', select: [], multiSelect: [], relation: [] }) } }] }, { headers: { 'content-type': 'application/json' } });
-    const response = await worker.fetch(new Request('https://worker.test/notion/ai', {
-      method: 'POST', headers: { Authorization: 'Bearer private-access' }, body: JSON.stringify({ url: body.url }),
-    }), { DEEPSEEK_API_KEY: 'test-ai-key', AI_ACCESS_TOKEN: 'private-access' });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ summary: '测试摘要' });
+  it('retires the AI endpoint and rejects legacy requests that require a summary', async () => {
+    expect((await post('/notion/ai', { url: body.url })).status).toBe(404);
+    expect((await post('/notion/page/create', { ...body, needSummarize: true })).status).toBe(400);
   });
   it('saves through a discovered data source after Jina throttles, returning the page identity', async () => {
     webpage(); database();
@@ -72,6 +51,35 @@ describe('backend API', () => {
     expect(submitted.parent).toEqual({ data_source_id: sourceId });
     expect(submitted.properties.Name.title[0].text.content).toBe('接口测试');
     expect(submitted.properties.URL.url).toBe('https://example.com');
+  });
+  it('keeps manual properties when saving without any AI dependency', async () => {
+    webpage(); database();
+    let submitted: any;
+    fetchMock.get('https://api.notion.com').intercept({ path: '/v1/pages', method: 'POST' }).reply(200, (request) => {
+      submitted = JSON.parse(String(request.body));
+      return { object: 'page', id: 'manual-page' };
+    });
+    const response = await post('/notion/page/create', { ...body, needSummarize: undefined, props: [
+      { name: 'Name', type: 'title' },
+      { name: 'Category', type: 'select', value: 'Tool' },
+      { name: 'Tags', type: 'multi_select', value: ' A\nB\nA\n ' },
+      { name: 'Description', type: 'rich_text', value: '手动简介' },
+    ] });
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty('summary');
+    expect(submitted.properties).toMatchObject({
+      Name: { title: [{ text: { content: 'Example Domain' } }] },
+      Category: { select: { name: 'Tool' } },
+      Tags: { multi_select: [{ name: 'A' }, { name: 'B' }] },
+      Description: { rich_text: [{ text: { content: '手动简介' } }] },
+    });
+    expect(submitted).not.toHaveProperty('children');
+  });
+  it('prepares only the title without writing a page', async () => {
+    webpage();
+    const response = await post('/notion/page/prepare', body);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ title: 'Example Domain' });
   });
   it('refuses an ambiguous multi-source database', async () => {
     database([{ id: sourceId, name: 'A' }, { id: 'another', name: 'B' }]);
