@@ -1,3 +1,4 @@
+import { RequestError } from '../errors';
 // 编写一个根据 URL 获取网页标题的方法
 import { load } from 'cheerio';
 import OpenAI from 'openai';
@@ -33,21 +34,19 @@ async function getWebPageTitle(url: string): Promise<string | null> {
 async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 	try {
 
-		if (!url.includes('jike')) {
-			// 获取网页内容
-			const jinaContent = await fetchLLMMarkdownContent(url);
-			const jinaPageParseInfo: JinaPageParseInfo = JSON.parse(jinaContent);
-
-			const jinaContentMarkdown = await fetchMarkdownContent(url);
-			const jinaMarkdownPageParseInfo: JinaPageParseInfo = JSON.parse(jinaContentMarkdown);
-
-
-			return {
-				title: jinaPageParseInfo.data.title,
-				originContent: jinaMarkdownPageParseInfo.data.content,
-				parseContent: jinaPageParseInfo.data.content,
-			};
-		}
+        if (!url.includes('jike')) {
+            try {
+                const response = await fetch(`https://r.jina.ai/${url}`, {
+                    headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000),
+                });
+                if (response.ok) {
+                    const result = await response.json() as JinaPageParseInfo;
+                    if (typeof result.data?.title === 'string' && typeof result.data?.content === 'string') {
+                        return { title: result.data.title, originContent: result.data.content, parseContent: result.data.content };
+                    }
+                }
+            } catch { /* Fall back to the public webpage if Reader is unavailable. */ }
+        }
 
 		// 获取网页内容
 		const html = await fetchWebPage(url);
@@ -63,7 +62,6 @@ async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 			$('meta[name="twitter:title"]').attr('content') ||
 			'No title found';
 
-		console.log('title:', title);
 		const originContent = html;
 		var parseContent = $('p')
 			.map((_, el) => $(el).text())
@@ -80,8 +78,7 @@ async function fetchWebPageInfo(url: string): Promise<WebPageInfo> {
 			parseContent,
 		};
 	} catch (error) {
-		console.error('Error fetching web page info:', error);
-		throw new Error(`Failed to fetch web page info: ${error instanceof Error ? error.message : String(error)}`);
+		throw new RequestError('网页内容获取失败，请稍后重试', 502);
 	}
 }
 
@@ -103,6 +100,7 @@ async function extractJikeTextFromHTML(html: string): Promise<string> {
 async function fetchWebPage(url: string): Promise<string> {
 	try {
 		const response = await fetch(url, {
+            signal: AbortSignal.timeout(10000),
 			headers: {
 				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
 			},
@@ -113,102 +111,10 @@ async function fetchWebPage(url: string): Promise<string> {
 		return await response.text();
 
 	} catch (error) {
-		console.error('Error fetching webpage:', error);
 		throw error;
 	}
 }
 
-
-async function fetchLLMMarkdownContent(url: string): Promise<string> {
-    const proxyUrl = 'https://r.jina.ai/';
-    const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
-
-	// 'x-return-format:': 'true',
-    const headers = {
-        'accept': 'application/json',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    };
-
-    try {
-        const response = await fetch(fullUrl, { headers });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-		const text = await response.text();
-		console.log('response:', text);
-        return text;
-    } catch (error) {
-        console.error('Error fetching web content:', error);
-        throw error;
-    }
-}
-
-
-
-async function fetchMarkdownContent(url: string): Promise<string> {
-    const proxyUrl = 'https://r.jina.ai/';
-    const fullUrl = `${proxyUrl}${encodeURIComponent(url)}`;
-
-	// 'x-return-format:': 'true',
-    const headers = {
-        'accept': 'application/json',
-		'x-return-format': 'html',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    };
-
-    try {
-        const response = await fetch(fullUrl, { headers });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-		const text = await response.text();
-		// console.log('response:', text);
-        return text;
-    } catch (error) {
-        console.error('Error fetching web content:', error);
-        throw error;
-    }
-}
-
-
-// 分割文本函数
-function splitText(text: string, maxLength: number): string[] {
-	const sentences = text.split(/(?<=[。！？\n])/); // 按句号、感叹号、换行符分割
-	const chunks: string[] = [];
-	let currentChunk = '';
-
-	for (const sentence of sentences) {
-		if ((currentChunk + sentence).length > maxLength) {
-			chunks.push(currentChunk);
-			currentChunk = sentence; // 开始新的片段
-		} else {
-			currentChunk += sentence; // 追加到当前片段
-		}
-	}
-
-	if (currentChunk) {
-		chunks.push(currentChunk); // 添加最后的片段
-	}
-
-	return chunks;
-}
-
-// 调用 OpenAI 生成摘要
-async function summarizeChunk(chunk: string): Promise<string> {
-	const openai = new OpenAI({
-		baseURL: 'https://api.deepseek.com',
-		apiKey: 'sk-7786e6f6e2ef464e8c2f5924641b6b28',
-	});
-
-	const response = await openai.chat.completions.create({
-		model: 'gpt-3.5-turbo', // 或 "gpt-4"
-		messages: [
-			{ role: 'system', content: 'You are a helpful assistant for text summarization.' },
-			{ role: 'user', content: `Summarize the following text: ${chunk}` },
-		],
-	});
-	return response.choices[0].message.content || 'Failed to summarize.';
-}
 
 export interface SelectChoice {
 	name: string;
@@ -235,11 +141,14 @@ export interface SummaryResult {
 	relation: RelationChoice[];
 }
 
-async function summarizeText(text: string, summaryExtentInfo?: SummaryExtentInfo): Promise<SummaryResult> {
+async function summarizeText(text: string, summaryExtentInfo?: SummaryExtentInfo, apiKey?: string): Promise<SummaryResult> {
+	if (!apiKey) throw new RequestError('尚未配置 AI 摘要服务', 503);
 	try {
 		const openai = new OpenAI({
 			baseURL: 'https://api.deepseek.com',
-			apiKey: 'sk-7786e6f6e2ef464e8c2f5924641b6b28',
+            timeout: 30000,
+            maxRetries: 0,
+			apiKey,
 		});
 
 		// 转换 selectOptions 为 map
@@ -247,7 +156,6 @@ async function summarizeText(text: string, summaryExtentInfo?: SummaryExtentInfo
 			acc[curr.name] = curr.options.map((option) => option.name);
 			return acc;
 		}, {} as Record<string, string[]>) || {};
-		console.log('selectOptionsMap:', selectOptionsMap);
 
 		// 转换 multiSelectOptions 为 map
 		const multiSelectOptionsMap = summaryExtentInfo?.multiSelectOptions?.reduce((acc, curr) => {
@@ -296,7 +204,6 @@ Return your response in the following JSON format:
 
 Text to analyze: ${text}`;
 
-		console.log('prompt:', prompt);
 		const completion = await openai.chat.completions.create({
 			model: 'deepseek-chat',
 			messages: [
@@ -316,16 +223,9 @@ Text to analyze: ${text}`;
 			throw new Error('Failed to generate analysis.');
 		}
 
-		console.log('ai response:', response);
 		return JSON.parse(response);
 	} catch (error) {
-		console.error('Error during content analysis:', error);
-		return {
-			summary: 'An error occurred while analyzing the text.',
-			select: [],
-			multiSelect: [],
-			relation: []
-		};
+		throw new RequestError('AI 摘要生成失败，请稍后重试', 502);
 	}
 }
 
@@ -334,26 +234,17 @@ Text to analyze: ${text}`;
  * @param url 网页链接
  * @returns
  */
-async function summarizeWebPage(url: string): Promise<SummaryResult> {
-	console.log('Fetching webpage...');
+async function summarizeWebPage(url: string, apiKey?: string): Promise<SummaryResult> {
 	const webPageInfo = await fetchWebPageInfo(url);
-	return summarizeWebPageByContent(webPageInfo);
+	return summarizeWebPageByContent(webPageInfo, undefined, apiKey);
 }
 
-async function summarizeWebPageByContent(webPageInfo: WebPageInfo, summaryExtentInfo?: SummaryExtentInfo): Promise<SummaryResult> {
+async function summarizeWebPageByContent(webPageInfo: WebPageInfo, summaryExtentInfo?: SummaryExtentInfo, apiKey?: string): Promise<SummaryResult> {
 	try {
-		console.log('Summarizing content...');
-		const summary: SummaryResult = await summarizeText(webPageInfo.parseContent || webPageInfo.originContent, summaryExtentInfo);
-		console.log('Summary:', summary);
+		const summary: SummaryResult = await summarizeText(webPageInfo.parseContent || webPageInfo.originContent, summaryExtentInfo, apiKey);
 		return summary;
 	} catch (error) {
-		console.error('Error summarizing webpage:', error);
-		return {
-			summary: 'An error occurred while summarizing the webpage.',
-			select: [],
-			multiSelect: [],
-			relation: []
-		};
+		throw new RequestError('AI 摘要生成失败，请稍后重试', 502);
 	}
 }
 

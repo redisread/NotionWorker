@@ -6,24 +6,29 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
-    "test": "vitest",
-    "cf-typegen": "wrangler types"
+    "test": "vitest run",
+    "cf-typegen": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm typecheck && pnpm test && wrangler deploy --dry-run"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5.2",
-    "@cloudflare/workers-types": "^4.20241224.0",
+    "@cloudflare/vitest-pool-workers": "0.6.16",
+    "@cloudflare/workers-types": "4.20250204.0",
     "@types/turndown": "^5.0.5",
     "typescript": "^5.5.2",
-    "vitest": "2.1.8",
-    "wrangler": "^3.60.3"
+    "vitest": "2.1.9",
+    "wrangler": "3.109.1",
+    "@vitest/runner": "2.1.9",
+    "@vitest/snapshot": "2.1.9"
   },
   "dependencies": {
-    "@notionhq/client": "^2.2.15",
+    "@notionhq/client": "5.0.0",
     "@types/marked": "^6.0.0",
     "cheerio": "^1.0.0",
     "hono": "^4.6.15",
     "marked": "^15.0.6",
     "openai": "^4.77.0",
     "turndown": "^7.2.0"
-  }
+  },
+  "packageManager": "pnpm@9.15.9"
 }

@@ -1,7 +1,7 @@
 import { Client } from '@notionhq/client';
 import { Context, Hono } from 'hono';
 //  https://shortcut.jiahongw.com/notion/addPage
-import { GetDatabaseResponse, QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints';
+import { GetDataSourceResponse, QueryDataSourceResponse } from '@notionhq/client/build/src/api-endpoints';
 import NotionService, { RelationPage } from '../services/notion.service';
 import { CreatePageParameters, BlockObjectRequest } from '@notionhq/client/build/src/api-endpoints';
 import { fetchWebPageInfo, getWebPageTitle, summarizeWebPageByContent, WebPageInfo, SummaryExtentInfo, SummaryResult } from '../utils/web';
@@ -32,32 +32,27 @@ function splitContent(content: string): string[] {
 
 // page ===== /notion/page
 async function retrievePage(ctx: Context): Promise<Response> {
-	const { notionApiKey, databaseId, pageId } = await ctx.req.json();
-	console.log(`notionApiKey: ${notionApiKey} databaseId: ${databaseId} pageId: ${pageId}`);
-	const notionService: NotionService = new NotionService(notionApiKey);
+	const { notionApiKey, databaseId, dataSourceId, pageId } = await ctx.req.json();
+	const notionService: NotionService = new NotionService(notionApiKey, dataSourceId);
 	try {
 		const response = await notionService.retrievePage(pageId);
-		console.log(response);
 		return ctx.json(response);
 	} catch (error) {
-		console.error('Error querying page:', error);
-		return ctx.json({ error: `查询失败: ${error instanceof Error ? error.message : String(error)}` }, 500);
+		throw error;
 	}
 }
 
 async function createPage(ctx: Context): Promise<Response> {
-	const { notionApiKey, databaseId, url, props, needSummarize } = await ctx.req.json();
-	console.log(`notionApiKey: ${notionApiKey}, databaseId: ${databaseId}, url: ${url} props: ${JSON.stringify(props)}`);
-	const notionService: NotionService = new NotionService(notionApiKey);
+	const { notionApiKey, databaseId, dataSourceId, url, props, needSummarize } = await ctx.req.json();
+	const notionService: NotionService = new NotionService(notionApiKey, dataSourceId);
 	var title: string | null;
 	const webPageInfo: WebPageInfo = await fetchWebPageInfo(url);
 	title = webPageInfo.title;
     // props 中 type 为 title 的属性，value 为 webPageInfo.title
     const titleProp = props?.find((prop: PropertyValue) => prop.type === 'title');
-    if (!titleProp.value) {
+    if (titleProp && !titleProp.value) {
         titleProp.value = webPageInfo.title;
     }
-	console.log(`get webPageInfo: ` + JSON.stringify(webPageInfo));
 	try {
 		const properties: Record<string, any> = {};
 		// 处理 props
@@ -108,11 +103,10 @@ async function createPage(ctx: Context): Promise<Response> {
 			});
 		}
 
-		const requestBody: CreatePageParameters = {
+		const requestBody: CreatePageParameters & { properties: NonNullable<CreatePageParameters['properties']> } = {
 			parent: { database_id: databaseId },
 			properties: properties,
 		};
-		console.log('requestBody:', requestBody);
 
 		let summaryResult: SummaryResult | undefined;
 		// 如果 needSummarize 为 true，则添加摘要到正文children
@@ -124,7 +118,6 @@ async function createPage(ctx: Context): Promise<Response> {
 					name: prop.name,
 					type: prop.type,
 				}));
-			console.log('propertyRequestList:', propertyRequestList);
 			const databasePropertiesDetail: DatabasePropertiesDetail = await notionService.retrieveDatabasePropertyDetails(
 				databaseId,
 				propertyRequestList
@@ -135,8 +128,7 @@ async function createPage(ctx: Context): Promise<Response> {
 				multiSelectOptions: extractPropertyDetails(databasePropertiesDetail.properties, 'multi_select'),
 				relationPages: extractPropertyDetails(databasePropertiesDetail.properties, 'relation')
 			};
-            console.log('summaryExtentInfo:', JSON.stringify(summaryExtentInfo));
-			summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo);
+			summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo, ctx.env?.DEEPSEEK_API_KEY);
 			if (summaryResult) {
 				// 构建页面内容块
 				const contentBlocks: BlockObjectRequest[] = [];
@@ -256,29 +248,28 @@ async function createPage(ctx: Context): Promise<Response> {
 
 		const response = await notionService.createPage(requestBody);
 		return ctx.json({
-			title: webPageInfo.title,
+			id: response.id,
+            url: 'url' in response ? response.url : undefined,
+            title: webPageInfo.title,
 			properties: requestBody.properties,
 			summary: summaryResult?.summary || '',
 		});
 	} catch (error) {
-		console.error('Error creating page:', error);
-		return ctx.json({ error: `创建失败: ${error instanceof Error ? error.message : String(error)}` }, 500);
+		throw error;
 	}
 }
 
 async function preparePage(ctx: Context): Promise<Response> {
-	const { notionApiKey, databaseId, url, props, needSummarize } = await ctx.req.json();
-	console.log(`notionApiKey: ${notionApiKey}, databaseId: ${databaseId}, url: ${url} props: ${JSON.stringify(props)}`);
-	const notionService: NotionService = new NotionService(notionApiKey);
+	const { notionApiKey, databaseId, dataSourceId, url, props, needSummarize } = await ctx.req.json();
+	const notionService: NotionService = new NotionService(notionApiKey, dataSourceId);
 	var title: string | null;
 	const webPageInfo: WebPageInfo = await fetchWebPageInfo(url);
 	title = webPageInfo.title;
     // props 中 type 为 title 的属性，value 为 webPageInfo.title
     const titleProp = props?.find((prop: PropertyValue) => prop.type === 'title');
-    if (!titleProp.value) {
+    if (titleProp && !titleProp.value) {
         titleProp.value = webPageInfo.title;
     }
-	console.log(`get webPageInfo: ` + JSON.stringify(webPageInfo));
 	try {
 		const properties: Record<string, any> = {};
 		// 处理 props
@@ -329,7 +320,7 @@ async function preparePage(ctx: Context): Promise<Response> {
 			});
 		}
 
-		const requestBody: CreatePageParameters = {
+		const requestBody: CreatePageParameters & { properties: NonNullable<CreatePageParameters['properties']> } = {
 			parent: { database_id: databaseId },
 			properties: properties,
 		};
@@ -344,7 +335,6 @@ async function preparePage(ctx: Context): Promise<Response> {
 					name: prop.name,
 					type: prop.type,
 				}));
-			console.log('propertyRequestList:', propertyRequestList);
 			const databasePropertiesDetail: DatabasePropertiesDetail = await notionService.retrieveDatabasePropertyDetails(
 				databaseId,
 				propertyRequestList
@@ -355,8 +345,7 @@ async function preparePage(ctx: Context): Promise<Response> {
 				multiSelectOptions: extractPropertyDetails(databasePropertiesDetail.properties, 'multi_select'),
 				relationPages: extractPropertyDetails(databasePropertiesDetail.properties, 'relation')
 			};
-            console.log('summaryExtentInfo:', JSON.stringify(summaryExtentInfo));
-			summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo);
+			summaryResult = await summarizeWebPageByContent(webPageInfo, summaryExtentInfo, ctx.env?.DEEPSEEK_API_KEY);
 			if (summaryResult) {
 				// 构建页面内容块
 				const contentBlocks: BlockObjectRequest[] = [];
@@ -447,8 +436,7 @@ async function preparePage(ctx: Context): Promise<Response> {
 			summary: summaryResult?.summary || '',
 		});
 	} catch (error) {
-		console.error('Error preparing page:', error);
-		return ctx.json({ error: `准备失败: ${error instanceof Error ? error.message : String(error)}` }, 500);
+		throw error;
 	}
 }
 

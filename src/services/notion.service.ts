@@ -1,50 +1,81 @@
+import { RequestError } from '../errors';
 import { Client } from '@notionhq/client';
-import { 
-    GetDatabaseResponse, 
-    QueryDatabaseResponse, 
-    GetPageResponse, 
-    CreatePageResponse, 
+import {
+    GetDataSourceResponse,
+    QueryDataSourceResponse,
+    GetPageResponse,
+    CreatePageResponse,
     CreatePageParameters,
     PageObjectResponse,
 } from '@notionhq/client/build/src/api-endpoints';
-import { 
+import {
     PropertyRequest,
     PropertyDetail,
     DatabasePropertiesDetail,
     RelationPage,
 } from '../types/notion';
 
+type DatabaseView = Omit<GetDataSourceResponse, 'object' | 'id'> & {
+    object: 'database';
+    id: string;
+    data_source_id: string;
+};
+
 class NotionService {
     private client: Client;
 
-    constructor(apiKey: string) {
-        this.client = new Client({ auth: apiKey });
+    constructor(apiKey: string, private dataSourceId?: string) {
+        this.client = new Client({ auth: apiKey, notionVersion: '2025-09-03', logger: () => {}, fetch: (url, init) => fetch(url, init) });
+    }
+
+    private async resolveDataSource(databaseId: string): Promise<string> {
+        const database = await this.client.databases.retrieve({ database_id: databaseId });
+        if (!('data_sources' in database)) throw new RequestError('无法读取数据库数据源', 403);
+        if (this.dataSourceId) {
+            if (!database.data_sources.some(source => source.id.replace(/-/g, '') === this.dataSourceId!.replace(/-/g, ''))) {
+                throw new RequestError('dataSourceId 不属于指定数据库');
+            }
+            return this.dataSourceId;
+        }
+        if (database.data_sources.length !== 1) throw new RequestError('该数据库包含多个数据源，请提供 dataSourceId', 409);
+        return database.data_sources[0].id;
+    }
+
+    async retrieveDatabaseAllTags(databaseId: string): Promise<string[]> {
+        const database = await this.retrieveDatabase(databaseId);
+        return [...new Set(Object.values(database.properties).flatMap(property =>
+            property.type === 'multi_select' ? property.multi_select.options.map(option => option.name) : []
+        ))];
+    }
+
+    async retrieveDatabaseAllArea(databaseId: string, propertyName: string): Promise<RelationPage[]> {
+        const database = await this.retrieveDatabase(databaseId);
+        const property = database.properties[propertyName];
+        if (!property || property.type !== 'relation') throw new RequestError('领域关联属性不存在');
+        return this.getRelationOptions(property.relation.data_source_id);
     }
 
     // 基础数据库操作
-    async retrieveDatabase(databaseId: string): Promise<GetDatabaseResponse> {
+    async retrieveDatabase(databaseId: string): Promise<DatabaseView> {
         try {
-            return await this.client.databases.retrieve({ database_id: databaseId });
+            const source = await this.client.dataSources.retrieve({ data_source_id: await this.resolveDataSource(databaseId) });
+            const id = databaseId.replace(/-/g, '').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+            return { ...source, object: 'database', id, data_source_id: source.id };
         } catch (error) {
             this.handleError('查询数据库失败', error);
         }
     }
 
-    async queryDatabase(databaseId: string, filter?: any): Promise<QueryDatabaseResponse> {
+    async queryDatabase(databaseId: string, filter?: any): Promise<QueryDataSourceResponse> {
         try {
-            const queryParams: any = { database_id: databaseId };
+            const queryParams: any = { data_source_id: await this.resolveDataSource(databaseId) };
             if (filter) {
                 queryParams.filter = filter;
-                console.log('NotionService 执行查询:', {
-                    数据库ID: databaseId,
-                    过滤条件: JSON.stringify(filter, null, 2)
-                });
+
             }
-            const response = await this.client.databases.query(queryParams);
-            console.log(`NotionService 查询完成: 返回 ${response.results.length} 条记录`);
+            const response = await this.client.dataSources.query(queryParams);
             return response;
         } catch (error) {
-            console.log('NotionService 查询失败:', error);
             this.handleError('查询数据库内容失败', error);
         }
     }
@@ -61,7 +92,7 @@ class NotionService {
             for (const request of propertyRequests) {
                 const property = database.properties[request.name];
                 if (!property) {
-                    throw new Error(`属性 "${request.name}" 不存在`);
+                    throw new RequestError(`属性 "${request.name}" 不存在`);
                 }
 
                 this.validatePropertyType(request, property);
@@ -85,6 +116,10 @@ class NotionService {
 
     async createPage(params: CreatePageParameters): Promise<CreatePageResponse> {
         try {
+            const parent = params.parent;
+            if (parent && 'database_id' in parent) {
+                params = { ...params, parent: { data_source_id: await this.resolveDataSource(parent.database_id) } };
+            }
             return await this.client.pages.create(params);
         } catch (error) {
             this.handleError('创建页面失败', error);
@@ -105,7 +140,7 @@ class NotionService {
                 detail.options = property[property.type].options.map(this.mapOption);
                 break;
             case 'relation':
-                detail.options = await this.getRelationOptions(property.relation.database_id);
+                detail.options = await this.getRelationOptions(property.relation.data_source_id);
                 break;
         }
 
@@ -113,8 +148,14 @@ class NotionService {
     }
 
     private async getRelationOptions(databaseId: string): Promise<Array<{ id: string; name: string }>> {
-        const pages = await this.queryDatabase(databaseId);
-        return pages.results
+        const results: QueryDataSourceResponse['results'] = [];
+        let cursor: string | undefined;
+        do {
+            const pages = await this.client.dataSources.query({ data_source_id: databaseId, start_cursor: cursor });
+            results.push(...pages.results);
+            cursor = pages.has_more ? pages.next_cursor ?? undefined : undefined;
+        } while (cursor);
+        return results
             .filter((page): page is PageObjectResponse => 'properties' in page)
             .map(page => ({
                 id: page.id,
@@ -124,8 +165,8 @@ class NotionService {
     }
 
     private getPageTitle(page: PageObjectResponse): string {
-        const titleProp = page.properties.Name as any;
-        return titleProp?.title?.[0]?.plain_text || '';
+        const titleProp = Object.values(page.properties).find(prop => prop.type === 'title');
+        return titleProp?.type === 'title' ? titleProp.title.map(text => text.plain_text).join('') : '';
     }
 
     private mapOption(opt: any) {
@@ -138,15 +179,14 @@ class NotionService {
 
     private validatePropertyType(request: PropertyRequest, property: any) {
         if (request.type && property.type !== request.type) {
-            throw new Error(
+            throw new RequestError(
                 `属性 "${request.name}" 类型不匹配，期望 "${request.type}"，实际 "${property.type}"`
             );
         }
     }
 
     private handleError(message: string, error: unknown): never {
-        console.error(`${message}:`, error);
-        throw new Error(`${message}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
     }
 }
 

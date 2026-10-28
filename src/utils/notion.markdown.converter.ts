@@ -176,49 +176,5 @@ class NotionMarkdownConverter {
   }
 }
 
-// 使用示例
-async function main() {
-  const NOTION_API_KEY = 'your-notion-api-key';
-  const PARENT_PAGE_ID = 'your-parent-page-id';
-  
-  const converter = new NotionMarkdownConverter(NOTION_API_KEY);
-  
-  const markdown = `# Hello Notion
-  
-This is a **bold** and *italic* text.
-
-## Code Example
-\`\`\`typescript
-const hello = "world";
-console.log(hello);
-\`\`\`
-
-### Lists
-- Item 1
-- Item 2
-  - Nested item
-
-1. First item
-2. Second item
-
-> This is a quote
-
----
-
-[Link to Notion](https://notion.so)
-`;
-
-  try {
-    await converter.createPage(
-      PARENT_PAGE_ID,
-      markdown,
-      "Markdown Test Page"
-    );
-    console.log('Successfully created page with markdown content');
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
-
 
 export default NotionMarkdownConverter;
