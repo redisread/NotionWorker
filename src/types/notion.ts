@@ -151,12 +151,3 @@ export interface PropertyOptions {
 	options: Option[];
 }
 
-export interface SummaryExtentInfo {
-	selectOptions?: PropertyOptions[];
-	multiSelectOptions?: PropertyOptions[];
-	relationPages?: PropertyOptions[];
-}
-
-
-
-  
