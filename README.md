@@ -6,7 +6,7 @@
 
 ## 本地开发
 
-Node.js 版本与 [CI 配置](.github/workflows/deploy_worker.yml) 保持一致；pnpm 版本以 [package.json](package.json) 的 `packageManager` 为准。
+Node.js 版本与 [CI 配置](.github/workflows/check.yml) 保持一致；pnpm 版本以 [package.json](package.json) 的 `packageManager` 为准。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -22,6 +22,8 @@ pnpm check
 ```
 
 检查包含类型、Workers 运行时测试和部署打包。测试使用模拟上游；通过检查不等于生产 Notion 保存已验证。
+
+GitHub Actions 对 PR 和 main 执行检查。Cloudflare Workers Builds 负责 main 的生产发布，并在发布前独立执行同一套检查。配置与切换验收见 [运维流程](docs/operations.md)。
 
 ## 按任务阅读
 
